@@ -115,7 +115,19 @@ public class VW implements Closeable {
         }
     }
 
-  public float[] multipredict(String example) {
+  public int[] multipredictLabels(String example) {
+    lock.lock();
+    try {
+      if (isOpen) {
+        return multipredictLabels(example, nativePointer);
+      }
+      throw new IllegalStateException("Already closed.");
+    } finally {
+      lock.unlock();
+    }
+  }
+
+  public float[] multipredictTopics(String example) {
     lock.lock();
     try {
       if (isOpen) {

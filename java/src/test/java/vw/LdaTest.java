@@ -50,7 +50,7 @@ public final class LdaTest {
   @Test
   public void testLdaPredict() throws Exception {
     VW v = rehydrateModel(trainNewModel());
-    float[] vector = v.multipredict("| 1:1 2:2 3:3");
+    float[] vector = v.multipredictTopics("| 1:1 2:2 3:3");
     assertNotNull(vector);
   }
 

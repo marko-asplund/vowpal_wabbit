@@ -119,7 +119,7 @@ public class VW implements Closeable {
     lock.lock();
     try {
       if (isOpen) {
-        return multipredict(example, nativePointer);
+        return multipredictTopics(example, nativePointer);
       }
       throw new IllegalStateException("Already closed.");
     } finally {
@@ -166,6 +166,7 @@ public class VW implements Closeable {
     public static native String version();
     private native long initialize(String command);
     private native float predict(String example, boolean learn, long nativePointer);
-    private native float[] multipredict(String example, long nativePointer);
+    private native int[] multipredictLabels(String example, long nativePointer);
+    private native float[] multipredictTopics(String example, long nativePointer);
     private native void closeInstance(long nativePointer);
 }

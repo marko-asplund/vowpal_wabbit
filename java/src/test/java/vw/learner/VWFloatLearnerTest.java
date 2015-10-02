@@ -7,12 +7,13 @@ import vw.VW;
 import vw.exception.IllegalVWInput;
 
 import java.io.*;
-import java.lang.reflect.Field;
-import java.util.*;
+import java.util.Map;
 import java.util.Map.Entry;
+import java.util.TreeMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+
 import static org.junit.Assert.*;
 
 /**
@@ -23,20 +24,6 @@ public class VWFloatLearnerTest {
     private final String heightData = "|f height:0.23 weight:0.25 width:0.05";
     private VWFloatLearner houseScorer;
 
-    private static List<String> loadedLibs() {
-        try {
-            final Field libs = ClassLoader.class.getDeclaredField("loadedLibraryNames");
-            libs.setAccessible(true);
-
-            @SuppressWarnings("unchecked")
-            final Vector<String> libraries = (Vector<String>) libs.get(ClassLoader.getSystemClassLoader());
-            return libraries;
-        }
-        catch (Exception e) {
-            return new ArrayList<String>();
-        }
-    }
-
     @Rule
     public ExpectedException thrown = ExpectedException.none();
 
@@ -46,11 +33,7 @@ public class VWFloatLearnerTest {
     @BeforeClass
     public static void globalSetup() throws IOException {
         try {
-            final String lib = new File(".").getCanonicalPath() + "/target/vw_jni.lib";
-            System.load(lib);
-            final List<String> libs = loadedLibs();
-            assertTrue(libs.contains(lib));
-            System.out.println("loaded libs: " + libs);
+            System.load(new File(".").getCanonicalPath() + "/target/vw_jni.lib");
         }
         catch (UnsatisfiedLinkError ignored) {
             // Do nothing as this means that the library should be loaded as part of the jar
@@ -277,14 +260,6 @@ public class VWFloatLearnerTest {
         threadPool.shutdown();
         threadPool.awaitTermination(1, TimeUnit.DAYS);
         predict.close();
-    }
-
-    @Test
-    public void testMultiLabel() {
-        thrown.expect(IllegalVWInput.class);
-        thrown.expectMessage("VW JNI layer only supports simple and multiclass predictions");
-        VWFloatLearner vw = new VWFloatLearner("--quiet --multilabel_oaa 3");
-        vw.close();
     }
 
     @Test

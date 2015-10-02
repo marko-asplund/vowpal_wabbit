@@ -6,6 +6,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * A JNI layer for submitting examples to VW and getting predictions back.  It should be noted
@@ -28,7 +29,7 @@ public class VW implements Closeable {
 
     private volatile static boolean loadedNativeLibrary = false;
     private static final Lock STATIC_LOCK = new ReentrantLock();
-    private boolean isOpen;
+  private AtomicBoolean isOpen = new AtomicBoolean();
 
     /**
      * Load tests have shown that a Lock is faster than synchronized (this).
@@ -52,7 +53,7 @@ public class VW implements Closeable {
      *                for more information
      */
     public VW(String command) {
-        isOpen = true;
+      isOpen.set(true);
         lock = new ReentrantLock();
         long currentNativePointer;
         try {
@@ -105,7 +106,7 @@ public class VW implements Closeable {
     public float predict(String example) {
         lock.lock();
         try {
-            if (isOpen) {
+          if (isOpen.get()) {
                 return predict(example, false, nativePointer);
             }
             throw new IllegalStateException("Already closed.");
@@ -114,6 +115,57 @@ public class VW implements Closeable {
             lock.unlock();
         }
     }
+
+  private static class VwContext {
+    final long nativePointer;
+    final Lock lock;
+    final AtomicBoolean isOpen;
+    final VW v;
+    VwContext(long nativePointer, Lock lock, AtomicBoolean isOpen, VW v) {
+      this.nativePointer = nativePointer;
+      this.lock = lock;
+      this.isOpen = isOpen;
+      this.v = v;
+    }
+  }
+
+  public static interface InternalMultiPredictor<T> {
+    T predict(String example, VwContext ctx); 
+  }
+
+  static class MultilabelPredictor implements InternalMultiPredictor<int[]> {
+    public int[] predict(String example, VwContext ctx) {
+      // TODO: implement this
+      return new int[]{};
+    }
+  }
+
+  static class LdaMultipredictor implements InternalMultiPredictor<float[]> {
+    public float[] predict(String example, VwContext ctx) {
+      ctx.lock.lock();
+      try {
+        if (ctx.isOpen.get()) {
+          return ctx.v.multipredictTopics(example, ctx.nativePointer);
+        }
+        throw new IllegalStateException("Already closed.");
+      } finally {
+        ctx.lock.unlock();
+      }
+    }
+  }
+
+  public static InternalMultiPredictor<float[]> lda() {
+    return new LdaMultipredictor();
+  }
+
+  public <T> VwMultiPredictor<T> multiPredictor(final InternalMultiPredictor<T> instance) throws Exception {
+    return new VwMultiPredictor<T>() {
+      final VwContext ctx = new VwContext(nativePointer, lock, isOpen, VW.this);
+      public T predict(String example) {
+        return instance.predict(example, ctx);
+      }
+    };
+  }
 
     /**
      * Runs learning on <code>example</code> and returns the prediction output.
@@ -124,7 +176,7 @@ public class VW implements Closeable {
     public float learn(String example) {
         lock.lock();
         try {
-            if (isOpen) {
+          if (isOpen.get()) {
                 return predict(example, true, nativePointer);
             }
             throw new IllegalStateException("Already closed.");
@@ -141,8 +193,8 @@ public class VW implements Closeable {
     public void close() {
         lock.lock();
         try {
-            if (isOpen) {
-                isOpen = false;
+          if (isOpen.get()) {
+            isOpen.set(false);
                 closeInstance(nativePointer);
             }
         }
@@ -154,5 +206,7 @@ public class VW implements Closeable {
     public static native String version();
     private native long initialize(String command);
     private native float predict(String example, boolean learn, long nativePointer);
+    private native int[] multipredictLabels(String example, long nativePointer);
+    private native float[] multipredictTopics(String example, long nativePointer);
     private native void closeInstance(long nativePointer);
 }

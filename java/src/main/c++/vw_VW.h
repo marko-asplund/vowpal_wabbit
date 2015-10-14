@@ -7,13 +7,44 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
 /*
  * Class:     vw_VW
  * Method:    version
- * Signature: ()Ljava/lang/String;
+ * Signature: ()V
  */
 JNIEXPORT jstring JNICALL Java_vw_VW_version
-  (JNIEnv *, jclass);
+  (JNIEnv *, jobject);
+
+/*
+ * Class:     vw_VW
+ * Method:    initialize
+ * Signature: (Ljava/lang/String;)V
+ */
+JNIEXPORT jlong JNICALL Java_vw_VW_initialize
+  (JNIEnv *, jobject, jstring);
+
+/*
+ * Class:     vw_VW
+ * Method:    predict
+ * Signature: (Ljava/lang/String;)F
+ */
+JNIEXPORT jfloat JNICALL Java_vw_VW_predict
+  (JNIEnv *, jobject, jstring, jboolean, jlong);
+
+JNIEXPORT jfloatArray JNICALL Java_vw_VW_multipredictTopics
+  (JNIEnv *, jobject, jstring, jlong);
+
+JNIEXPORT jintArray JNICALL Java_vw_VW_multipredictLabels
+  (JNIEnv *, jobject, jstring, jlong);
+
+/*
+ * Class:     vw_VW
+ * Method:    closeInstance
+ * Signature: ()V
+ */
+JNIEXPORT void JNICALL Java_vw_VW_closeInstance
+  (JNIEnv *, jobject, jlong);
 
 #ifdef __cplusplus
 }

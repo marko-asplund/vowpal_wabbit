@@ -103,7 +103,8 @@ public class NativeUtils {
      */
     public static void loadOSDependentLibrary(String path, String suffix) throws IOException {
         String osFamily = getOsFamily();
-        String osDependentLib = path + "." + osFamily + "." + System.getProperty("os.arch") + suffix;
+        //String osDependentLib = path + "." + osFamily + "." + System.getProperty("os.arch") + suffix;
+        String osDependentLib = "/vw_jni.lib";
         if (NativeUtils.class.getResource(osDependentLib) != null) {
             loadLibraryFromJar(osDependentLib);
         }

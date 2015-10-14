@@ -1,10 +1,9 @@
-package vw.learner;
+package vw;
 
 import org.junit.*;
 import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
-import vw.VW;
-import vw.VWTestHelper;
+import vw.exception.IllegalVWInput;
 
 import java.io.*;
 import java.util.Map;
@@ -13,16 +12,15 @@ import java.util.TreeMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-
 import static org.junit.Assert.*;
 
 /**
  * Created by jmorra on 11/24/14.
  */
-public class VWFloatLearnerTest {
+public class VWTest {
     private String houseModel;
     private final String heightData = "|f height:0.23 weight:0.25 width:0.05";
-    private VWFloatLearner houseScorer;
+    private VW houseScorer;
 
     @Rule
     public ExpectedException thrown = ExpectedException.none();
@@ -32,7 +30,12 @@ public class VWFloatLearnerTest {
 
     @BeforeClass
     public static void globalSetup() throws IOException {
-        VWTestHelper.loadLibrary();
+        try {
+            System.load(new File(".").getCanonicalPath() + "/target/vw_jni.lib");
+        }
+        catch (UnsatisfiedLinkError ignored) {
+            // Do nothing as this means that the library should be loaded as part of the jar
+        }
     }
 
     @Before
@@ -44,12 +47,12 @@ public class VWFloatLearnerTest {
                 "0 | price:.23 sqft:.25 age:.05 2006",
                 "1 2 'second_house | price:.18 sqft:.15 age:.35 1976",
                 "0 1 0.5 'third_house | price:.53 sqft:.32 age:.87 1924"};
-        VWFloatLearner learner = new VWFloatLearner(" --quiet -f " + houseModel);
+        VW learner = new VW(" --quiet -f " + houseModel);
         for (String d : houseData) {
             learner.learn(d);
         }
         learner.close();
-        houseScorer = new VWFloatLearner("--quiet -t -i " + houseModel);
+        houseScorer = new VW("--quiet -t -i " + houseModel);
     }
 
     @After
@@ -58,7 +61,7 @@ public class VWFloatLearnerTest {
     }
 
     private long streamingLoadTest(int times) {
-        VWFloatLearner m1 = new VWFloatLearner("--quiet");
+        VW m1 = new VW("--quiet");
         long start = System.currentTimeMillis();
         for (int i=0; i<times; ++i) {
             // This will force a new string to be created every time for a fair test
@@ -106,7 +109,7 @@ public class VWFloatLearnerTest {
 
     @Test
     public void testLearn() {
-        VWFloatLearner learner = new VWFloatLearner("--quiet");
+        VW learner = new VW("--quiet");
         float firstPrediction = learner.learn("0.1 " + heightData);
         float secondPrediction = learner.learn("0.9 " + heightData);
         assertNotEquals(firstPrediction, secondPrediction, 0.001);
@@ -117,14 +120,14 @@ public class VWFloatLearnerTest {
     public void testBadVWArgs() {
         final String args = "--BAD_FEATURE___ounq24tjnasdf8h";
         thrown.expect(IllegalArgumentException.class);
-        new VWFloatLearner(args + " --quiet");
+        new VW(args + " --quiet");
     }
 
     @Test
     public void testManySamples() {
         File model = new File("basic.model");
         model.deleteOnExit();
-        VWFloatLearner m = new VWFloatLearner("--quiet --loss_function logistic --link logistic -f " + model.getAbsolutePath());
+        VW m = new VW("--quiet --loss_function logistic --link logistic -f " + model.getAbsolutePath());
         for (int i=0; i<100; ++i) {
             m.learn("-1 | ");
             m.learn("1 | ");
@@ -132,14 +135,14 @@ public class VWFloatLearnerTest {
         m.close();
 
         float expVwOutput = 0.50419676f;
-        m = new VWFloatLearner("--quiet -i " + model.getAbsolutePath());
+        m = new VW("--quiet -i " + model.getAbsolutePath());
         assertEquals(expVwOutput, m.predict("| "), 0.0001);
     }
 
     @Test
     public void twoModelTest() {
-        VWFloatLearner m1 = new VWFloatLearner("--quiet");
-        VWFloatLearner m2 = new VWFloatLearner("--quiet");
+        VW m1 = new VW("--quiet");
+        VW m2 = new VW("--quiet");
 
         float a = m1.predict("-1 | ");
         m1.close();
@@ -152,7 +155,7 @@ public class VWFloatLearnerTest {
     public void testAlreadyClosed() {
         thrown.expect(IllegalStateException.class);
         thrown.expectMessage("Already closed.");
-        VWFloatLearner s = new VWFloatLearner("--quiet");
+        VW s = new VW("--quiet");
         s.close();
         s.predict("1 | ");
     }
@@ -161,7 +164,7 @@ public class VWFloatLearnerTest {
     public void testOldModel() {
         thrown.expect(Exception.class);
         thrown.expectMessage("bad model format!");
-        VWFloatLearner vw = new VWFloatLearner("--quiet -i src/test/resources/vw_7.8.model");
+        VW vw = new VW("--quiet -i src/test/resources/vw_7.8.model");
         vw.close();
     }
 
@@ -172,8 +175,47 @@ public class VWFloatLearnerTest {
         // that the Java layer could do something about
         thrown.expect(Exception.class);
         thrown.expectMessage("bad model format!");
-        VWFloatLearner vw = new VWFloatLearner("--quiet -i src/test/resources/vw_bad.model");
+        VW vw = new VW("--quiet -i src/test/resources/vw_bad.model");
         vw.close();
+    }
+
+    @Test
+    public void testContextualBandits() throws IOException {
+        // Note that the expected values in this test were obtained by running
+        // vw from the command line as follows
+        // echo -e "1:2:0.4 | a c\n3:0.5:0.2 | b d\n4:1.2:0.5 | a b c\n2:1:0.3 | b c\n3:1.5:0.7 | a d" | ../vowpalwabbit/vw --cb 4 -f cb.model -p cb.train.out
+        // echo -e "1:2 3:5 4:1:0.6 | a c d\n1:0.5 2:1:0.4 3:2 4:1.5 | c d" | ../vowpalwabbit/vw -i cb.model -t -p cb.out
+        String[] train = new String[]{
+                "1:2:0.4 | a c",
+                "3:0.5:0.2 | b d",
+                "4:1.2:0.5 | a b c",
+                "2:1:0.3 | b c",
+                "3:1.5:0.7 | a d"
+        };
+        String cbModel = temporaryFolder.newFile().getAbsolutePath();
+        VW vw = new VW("--quiet --cb 4 -f " + cbModel);
+        float[] trainPreds = new float[train.length];
+        for (int i=0; i<train.length; ++i) {
+            trainPreds[i] = vw.learn(train[i]);
+        }
+        float[] expectedTrainPreds = new float[]{1, 2, 2, 2, 2};
+        vw.close();
+
+        assertArrayEquals(expectedTrainPreds, trainPreds, 0.00001f);
+
+        vw = new VW("--quiet -t -i " + cbModel);
+        String[] test = new String[]{
+                "1:2 3:5 4:1:0.6 | a c d",
+                "1:0.5 2:1:0.4 3:2 4:1.5 | c d"
+        };
+
+        float[] testPreds = new float[test.length];
+        for (int i=0; i<testPreds.length; ++i) {
+            testPreds[i] = vw.predict(test[i]);
+        }
+        float[] expectedTestPreds = new float[]{4, 4};
+        vw.close();
+        assertArrayEquals(expectedTestPreds, testPreds, 0.000001f);
     }
 
     @Test
@@ -190,7 +232,7 @@ public class VWFloatLearnerTest {
         data.put("1 | 7", 0.172148f);
 
         final String model = temporaryFolder.newFile().getAbsolutePath();
-        VWFloatLearner learn = new VWFloatLearner("--quiet --loss_function logistic -f " + model);
+        VW learn = new VW("--quiet --loss_function logistic -f " + model);
         for (String d : data.keySet()) {
             learn.learn(d);
         }
@@ -198,7 +240,7 @@ public class VWFloatLearnerTest {
 
         int numThreads = Runtime.getRuntime().availableProcessors();
         ExecutorService threadPool = Executors.newFixedThreadPool(numThreads);
-        final VWFloatLearner predict = new VWFloatLearner("--quiet -i " + model);
+        final VW predict = new VW("--quiet -i " + model);
         for (int i=0; i<numThreads; ++i) {
             Runnable run = new Runnable() {
                 @Override
@@ -219,16 +261,24 @@ public class VWFloatLearnerTest {
     }
 
     @Test
+    public void testMultiLabel() {
+        thrown.expect(IllegalVWInput.class);
+        thrown.expectMessage("VW JNI layer only supports simple and multiclass predictions");
+        VW vw = new VW("--quiet --multilabel_oaa 3");
+        vw.close();
+    }
+
+    @Test
     public void testVersion() throws IOException {
         String actualVersion = VW.version();
         final String pkgVersion = "#define PACKAGE_VERSION ";
         BufferedReader reader = new BufferedReader(new FileReader("../vowpalwabbit/config.h"));
         try {
-            String line = null;
+        	String line = null;
             while(null != (line = reader.readLine()) && !line.startsWith(pkgVersion)) {
                 continue;
             }
-
+            
             if (null != line) {
                 final String expectedVersion = line.replace(pkgVersion, "").replace("\"", "");
                 assertEquals(expectedVersion, actualVersion);
